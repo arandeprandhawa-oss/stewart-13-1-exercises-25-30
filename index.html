@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>body{margin:0}</style>
+</head>
+<body>
+<title>Space Curve Matching</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+/* Layout: equations stay pinned in a side column; six rotatable figures fill the main column, each with its own picker. */
+:root {
+  --bg: #f5f8fb;
+  --surface: #ffffff;
+  --ink: #15202c;
+  --muted: #566575;
+  --line: #d3dce6;
+  --axis: #2b3743;
+  --curve: #1670b8;
+  --curve-far: #a9cbe6;
+  --wash: #e8f1f9;
+  --good: #1c7648;
+  --good-wash: #e3f3ea;
+  --bad: #ad3a27;
+  --bad-wash: #f9e9e5;
+  --math: "STIX Two Text", "Cambria Math", Cambria, "Times New Roman", serif;
+  --ui: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f151c; --surface: #171f29; --ink: #e5ecf3; --muted: #94a3b3; --line: #2b3745;
+    --axis: #c3ced9; --curve: #5fb0ee; --curve-far: #2b5376; --wash: #1c2a39;
+    --good: #63c794; --good-wash: #16291f; --bad: #f0907c; --bad-wash: #2e1b17;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f151c; --surface: #171f29; --ink: #e5ecf3; --muted: #94a3b3; --line: #2b3745;
+  --axis: #c3ced9; --curve: #5fb0ee; --curve-far: #2b5376; --wash: #1c2a39;
+  --good: #63c794; --good-wash: #16291f; --bad: #f0907c; --bad-wash: #2e1b17;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--ui); font-size: 15px; line-height: 1.5; }
+.page { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 48px; display: flex; flex-direction: column; gap: 24px; }
+
+.eyebrow { font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--curve); font-weight: 600; margin: 0; }
+h1 { font-family: var(--math); font-weight: 600; font-size: clamp(24px, 3.4vw, 34px); line-height: 1.15; margin: 6px 0 8px; text-wrap: balance; }
+.lead { margin: 0; color: var(--muted); max-width: 62ch; }
+
+.layout { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 28px; align-items: start; }
+.eq-panel { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 16px); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.work { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 880px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .eq-panel { position: static; }
+}
+
+h2 { font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 0; }
+.eq-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.eq-item { border-bottom: 1px solid var(--line); padding-block: 10px; display: flex; flex-direction: column; gap: 4px; }
+.eq-head { display: flex; gap: 10px; align-items: baseline; }
+.eq-num { font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
+.eq { font-family: var(--math); font-size: 17px; line-height: 1.4; min-width: 0; }
+.eq i { font-style: italic; }
+.eq sup { font-size: .7em; line-height: 0; }
+.eq-tag { margin-left: auto; flex: none; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.eq-tag.placed { color: var(--curve); font-weight: 600; }
+details { font-size: 13.5px; color: var(--muted); padding-left: 30px; }
+summary { cursor: pointer; width: fit-content; }
+summary:hover { color: var(--ink); }
+details ul { margin: 6px 0 2px; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+details .eq { font-size: 15px; }
+
+.views { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.views span { font-size: 13px; color: var(--muted); margin-right: 2px; }
+button { font: inherit; font-size: 13.5px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+button:hover { border-color: var(--curve); }
+button.primary { background: var(--curve); border-color: var(--curve); color: var(--surface); font-weight: 600; padding: 9px 18px; }
+button.primary:hover { filter: brightness(1.08); }
+:focus-visible { outline: 2px solid var(--curve); outline-offset: 2px; }
+
+.graphs { display: grid; grid-template-columns: repeat(auto-fill, minmax(225px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.card[data-state="ok"] { border-color: var(--good); }
+.card[data-state="no"] { border-color: var(--bad); }
+.fig { position: relative; }
+.numeral { position: absolute; top: 0; left: 2px; font-family: var(--math); font-size: 19px; pointer-events: none; }
+canvas { display: block; width: 100%; aspect-ratio: 5 / 4; max-width: 100%; cursor: grab; touch-action: pan-y; border-radius: 4px; }
+canvas:active { cursor: grabbing; }
+label.pick { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+select { font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 7px 8px; width: 100%; min-width: 0; }
+.status { font-size: 13px; font-weight: 600; padding: 4px 8px; border-radius: 4px; width: fit-content; }
+.status.ok { color: var(--good); background: var(--good-wash); }
+.status.no { color: var(--bad); background: var(--bad-wash); }
+.why { font-size: 13.5px; margin: 0; }
+.why .eq { font-size: 15px; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.score { font-weight: 600; font-variant-numeric: tabular-nums; margin-left: 4px; }
+.note { font-size: 13px; color: var(--muted); margin: 0; max-width: 70ch; }
+footer { border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+
+<div class="page">
+  <header>
+    <p class="eyebrow">Stewart 13.1 &middot; Exercises 25&ndash;30</p>
+    <h1>Match the parametric equations with the graphs</h1>
+    <p class="lead">Choose the equations for each graph I&ndash;VI. Drag a graph to turn it around. Have a reason ready for every choice before you check.</p>
+  </header>
+
+  <div class="layout">
+    <aside class="eq-panel" aria-labelledby="eq-h">
+      <h2 id="eq-h">The equations</h2>
+      <ul class="eq-list" id="eq-list"></ul>
+    </aside>
+
+    <section class="work" aria-labelledby="gr-h">
+      <div class="views" role="group" aria-label="Viewing direction for all graphs">
+        <h2 id="gr-h" style="margin-right:6px">The graphs</h2>
+        <button type="button" id="view-book">Textbook view</button>
+        <button type="button" id="view-z">Down the z-axis</button>
+        <button type="button" id="view-x">Along the x-axis</button>
+        <button type="button" id="view-y">Along the y-axis</button>
+      </div>
+
+      <div class="graphs" id="graphs"></div>
+
+      <div class="actions">
+        <button type="button" class="primary" id="check">Check my matches</button>
+        <button type="button" id="reveal">Reveal answers</button>
+        <button type="button" id="reset">Start over</button>
+        <span class="score" id="score" aria-live="polite"></span>
+      </div>
+      <p class="note">Each graph is scaled to fit its frame, so the three axes are not to equal scale. The straight-on views show the curve's projection onto a coordinate plane.</p>
+    </section>
+  </div>
+
+  <footer>
+    <p class="note">On a test this usually shows up as one vector function: name the surface the curve lies on, then sketch it or pick its graph and give the reason.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var TAU = Math.PI * 2, cos = Math.cos, sin = Math.sin;
+  var v = function (s) { return '<i>' + s + '</i>'; };
+  var x = v('x'), y = v('y'), z = v('z'), t = v('t');
+  var sq = '<sup>2</sup>';
+  var m = function (s) { return '<span class="eq">' + s + '</span>'; };
+
+  var EQS = [
+    { n: 25, plain: 'x = t cos t,  y = t,  z = t sin t,  t ≥ 0',
+      html: x + ' = ' + t + ' cos ' + t + ', ' + y + ' = ' + t + ', ' + z + ' = ' + t + ' sin ' + t + ', ' + t + ' ≥ 0',
+      ask: ['Work out ' + m(x + sq + ' + ' + z + sq) + ' and compare it with ' + m(y + sq) + '. What surface is that?',
+            'Where is the curve when ' + m(t + ' = 0') + '?',
+            'What happens to the distance from the ' + m(y) + '-axis as ' + m(t) + ' grows?'],
+      why: 'Here ' + m(x + sq + ' + ' + z + sq + ' = ' + t + sq + ' = ' + y + sq) + ', so the curve lies on the cone ' + m(x + sq + ' + ' + z + sq + ' = ' + y + sq) + '. With ' + m(t + ' ≥ 0') + ' it starts at the origin and spirals around the ' + m(y) + '-axis, the radius growing as ' + m(y) + ' grows.' },
+    { n: 26, plain: 'x = cos t,  y = sin t,  z = 1/(1 + t²)',
+      html: x + ' = cos ' + t + ', ' + y + ' = sin ' + t + ', ' + z + ' = 1/(1 + ' + t + sq + ')',
+      ask: ['What is ' + m(x + sq + ' + ' + y + sq) + '? What surface does that put the curve on?',
+            'What is the largest value of ' + m(z) + ', and at which ' + m(t) + '?',
+            'What does ' + m(z) + ' do as ' + m(t + ' → ±∞') + '? Is it ever negative?'],
+      why: 'Since ' + m(x + sq + ' + ' + y + sq + ' = 1') + ', the curve lies on the circular cylinder ' + m(x + sq + ' + ' + y + sq + ' = 1') + '. The height ' + m(z + ' = 1/(1 + ' + t + sq + ')') + ' is always positive, peaks at 1 when ' + m(t + ' = 0') + ', and tends to 0 as ' + m(t + ' → ±∞') + '. So there is one hump at ' + m('(1, 0, 1)') + ' and the curve winds down toward the unit circle in the ' + m(x + y) + '-plane.' },
+    { n: 27, plain: 'x = t,  y = 1/(1 + t²),  z = t²',
+      html: x + ' = ' + t + ', ' + y + ' = 1/(1 + ' + t + sq + '), ' + z + ' = ' + t + sq,
+      ask: ['Eliminate ' + m(t) + ' between ' + m(x) + ' and ' + m(z) + '. What surface do you get?',
+            'Is any component periodic? Can this curve wind around anything?',
+            'Compare the points at ' + m(t) + ' and ' + m('−' + t) + '. What symmetry does that give?'],
+      why: 'With ' + m(x + ' = ' + t) + ' and ' + m(z + ' = ' + t + sq) + ' we get ' + m(z + ' = ' + x + sq) + ', a parabolic cylinder. Nothing is periodic, so the curve never winds. ' + m(y + ' = 1/(1 + ' + x + sq + ')') + ' is 1 at ' + m(t + ' = 0') + ', the point ' + m('(0, 1, 0)') + ', and shrinks toward 0 as ' + m('|' + t + '|') + ' grows, giving two mirror-image branches that rise from that point.' },
+    { n: 28, plain: 'x = cos t,  y = sin t,  z = cos 2t',
+      html: x + ' = cos ' + t + ', ' + y + ' = sin ' + t + ', ' + z + ' = cos 2' + t,
+      ask: ['What is ' + m(x + sq + ' + ' + y + sq) + '?',
+            'Every component is periodic. Does the curve close up on itself?',
+            'How many times does ' + m(z) + ' go up and down during one trip around?'],
+      why: 'Again ' + m(x + sq + ' + ' + y + sq + ' = 1') + ', so the curve is on the cylinder. All three components repeat after ' + m('2π') + ', so the curve is closed. ' + m(z + ' = cos 2' + t + ' = ' + x + sq + ' − ' + y + sq) + ' rises and falls twice per trip: ' + m(z + ' = 1') + ' at ' + m('(±1, 0)') + ' and ' + m(z + ' = −1') + ' at ' + m('(0, ±1)') + '.' },
+    { n: 29, plain: 'x = cos 8t,  y = sin 8t,  z = e^(0.8t),  t ≥ 0',
+      html: x + ' = cos 8' + t + ', ' + y + ' = sin 8' + t + ', ' + z + ' = ' + v('e') + '<sup>0.8' + t + '</sup>, ' + t + ' ≥ 0',
+      ask: ['What is ' + m(x + sq + ' + ' + y + sq) + '?',
+            'What is the smallest value of ' + m(z) + ' for ' + m(t + ' ≥ 0') + '?',
+            'The curve circles at a steady rate. Does ' + m(z) + ' rise at a steady rate?'],
+      why: 'The curve is on the cylinder ' + m(x + sq + ' + ' + y + sq + ' = 1') + ' and circles it at a steady rate while ' + m(z + ' = ' + v('e') + '<sup>0.8' + t + '</sup>') + ' climbs from 1, faster and faster. That makes a helix whose coils are tight near the bottom and spread apart higher up.' },
+    { n: 30, plain: 'x = cos² t,  y = sin² t,  z = t',
+      html: x + ' = cos' + sq + ' ' + t + ', ' + y + ' = sin' + sq + ' ' + t + ', ' + z + ' = ' + t,
+      ask: ['What is ' + m(x + ' + ' + y) + '? What kind of surface is that?',
+            'What are the smallest and largest values ' + m(x) + ' and ' + m(y) + ' can take?',
+            'How does ' + m(z) + ' change with ' + m(t) + '?'],
+      why: 'Because ' + m(x + ' + ' + y + ' = cos' + sq + ' ' + t + ' + sin' + sq + ' ' + t + ' = 1') + ', the curve lies in the vertical plane ' + m(x + ' + ' + y + ' = 1') + '. Both ' + m(x) + ' and ' + m(y) + ' stay between 0 and 1, so the curve swings back and forth between ' + m(x + ' = 1') + ' and ' + m(y + ' = 1') + ' while ' + m(z + ' = ' + t) + ' rises steadily.' }
+  ];
+  var EQ = {}; EQS.forEach(function (e) { EQ[e.n] = e; });
+
+  var GRAPHS = [
+    { id: 'I',   ans: 28, n: 360,  t0: 0,          t1: TAU,       s: [1, 1, 1],            f: function (t) { return [cos(t), sin(t), cos(2 * t)]; } },
+    { id: 'II',  ans: 25, n: 1400, t0: 0,          t1: 7 * TAU,   s: [1 / 44, 1.7 / 44, 1 / 44], f: function (t) { return [t * cos(t), t, t * sin(t)]; } },
+    { id: 'III', ans: 30, n: 420,  t0: -1.5 * Math.PI, t1: 1.5 * Math.PI, s: [1, 1, 1 / Math.PI], f: function (t) { var c = cos(t), s = sin(t); return [c * c, s * s, t]; } },
+    { id: 'IV',  ans: 29, n: 1300, t0: 0,          t1: 4.5,       s: [1, 1, 2.4 / 36.6],   f: function (t) { return [cos(8 * t), sin(8 * t), Math.exp(0.8 * t)]; } },
+    { id: 'V',   ans: 27, n: 240,  t0: -2.2,       t1: 2.2,       s: [0.5, 1.2, 1.6 / 4.84], f: function (t) { return [t, 1 / (1 + t * t), t * t]; } },
+    { id: 'VI',  ans: 26, n: 1600, t0: -22,        t1: 22,        s: [1, 1, 1.3],          f: function (t) { return [cos(t), sin(t), 1 / (1 + t * t)]; } }
+  ];
+  var BOOK = { a: 0.5, e: 0.33 };
+
+  GRAPHS.forEach(function (g) {
+    var pts = [], lo = [0, 0, 0], hi = [0, 0, 0], i, k;
+    for (i = 0; i <= g.n; i++) {
+      var p = g.f(g.t0 + (g.t1 - g.t0) * i / g.n);
+      p = [p[0] * g.s[0], p[1] * g.s[1], p[2] * g.s[2]];
+      pts.push(p);
+      for (k = 0; k < 3; k++) { if (p[k] < lo[k]) lo[k] = p[k]; if (p[k] > hi[k]) hi[k] = p[k]; }
+    }
+    g.pts = pts;
+    g.axes = [0, 1, 2].map(function (k) {
+      var a = [0, 0, 0], b = [0, 0, 0];
+      a[k] = lo[k] - 0.15; b[k] = hi[k] + 0.4;
+      return [a, b];
+    });
+    var c = [0, 1, 2].map(function (k) { return (lo[k] - 0.15 + hi[k] + 0.4) / 2; });
+    var R = 0;
+    var far = function (p) { var d = Math.hypot(p[0] - c[0], p[1] - c[1], p[2] - c[2]); if (d > R) R = d; };
+    pts.forEach(far); g.axes.forEach(function (ax) { far(ax[0]); far(ax[1]); });
+    g.c = c; g.R = R; g.a = BOOK.a; g.e = BOOK.e;
+  });
+
+  /* ---------- drawing ---------- */
+  var colors = {};
+  function hex(s) { s = s.trim().replace('#', ''); return [0, 2, 4].map(function (i) { return parseInt(s.substr(i, 2), 16); }); }
+  function readColors() {
+    var cs = getComputedStyle(document.documentElement);
+    colors.axis = cs.getPropertyValue('--axis').trim();
+    colors.near = hex(cs.getPropertyValue('--curve'));
+    colors.far = hex(cs.getPropertyValue('--curve-far'));
+    colors.math = cs.getPropertyValue('--math').trim();
+  }
+  var BANDS = 12;
+  function draw(g) {
+    var ctx = g.ctx, w = g.w, h = g.h;
+    if (!w) return;
+    var dpr = g.dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    var ca = cos(g.a), sa = sin(g.a), ce = cos(g.e), se = sin(g.e);
+    var r = [-sa, ca, 0], u = [-ca * se, -sa * se, ce], d = [ca * ce, sa * ce, se];
+    var k = (Math.min(w, h) / 2 - 24) / g.R, c = g.c;
+    function P(p) {
+      var X = p[0] - c[0], Y = p[1] - c[1], Z = p[2] - c[2];
+      return [w / 2 + k * (X * r[0] + Y * r[1]), h / 2 - k * (X * u[0] + Y * u[1] + Z * u[2]), X * d[0] + Y * d[1] + Z * d[2]];
+    }
+    // axes
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = colors.axis; ctx.fillStyle = colors.axis; ctx.lineWidth = 1;
+    ctx.font = 'italic 15px ' + colors.math; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ['x', 'y', 'z'].forEach(function (name, i) {
+      var A = P(g.axes[i][0]), B = P(g.axes[i][1]);
+      var dx = B[0] - A[0], dy = B[1] - A[1], len = Math.hypot(dx, dy);
+      ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(B[0], B[1]); ctx.stroke();
+      if (len > 10) {
+        var ux = dx / len, uy = dy / len;
+        ctx.beginPath();
+        ctx.moveTo(B[0], B[1]);
+        ctx.lineTo(B[0] - 7 * ux + 3 * uy, B[1] - 7 * uy - 3 * ux);
+        ctx.lineTo(B[0] - 7 * ux - 3 * uy, B[1] - 7 * uy + 3 * ux);
+        ctx.closePath(); ctx.fill();
+        ctx.fillText(name, B[0] + 11 * ux, B[1] + 11 * uy);
+      }
+    });
+    // curve, back to front in depth bands
+    var q = g.pts.map(P), buckets = [], i, b;
+    for (b = 0; b < BANDS; b++) buckets.push([]);
+    for (i = 0; i < q.length - 1; i++) {
+      var tt = ((q[i][2] + q[i + 1][2]) / 2 / g.R + 1) / 2;
+      b = Math.max(0, Math.min(BANDS - 1, Math.floor(tt * BANDS)));
+      buckets[b].push(i);
+    }
+    for (b = 0; b < BANDS; b++) {
+      if (!buckets[b].length) continue;
+      var f = b / (BANDS - 1);
+      var col = [0, 1, 2].map(function (j) { return Math.round(colors.far[j] + (colors.near[j] - colors.far[j]) * f); });
+      ctx.strokeStyle = 'rgb(' + col.join(',') + ')';
+      ctx.lineWidth = 1.3 + 1.1 * f;
+      ctx.beginPath();
+      buckets[b].forEach(function (i) { ctx.moveTo(q[i][0], q[i][1]); ctx.lineTo(q[i + 1][0], q[i + 1][1]); });
+      ctx.stroke();
+    }
+  }
+  function drawAll() { readColors(); GRAPHS.forEach(draw); }
+
+  /* ---------- state ---------- */
+  var picks = {}, checked = {}, message = '';
+  GRAPHS.forEach(function (g) { picks[g.id] = null; checked[g.id] = false; });
+  try {
+    var saved = JSON.parse(localStorage.getItem('space-curve-picks') || '{}');
+    GRAPHS.forEach(function (g) { if (EQ[saved[g.id]]) picks[g.id] = saved[g.id]; });
+  } catch (err) {}
+  function save() { try { localStorage.setItem('space-curve-picks', JSON.stringify(picks)); } catch (err) {} }
+
+  /* ---------- build DOM ---------- */
+  var eqList = document.getElementById('eq-list');
+  EQS.forEach(function (e) {
+    var li = document.createElement('li');
+    li.className = 'eq-item';
+    li.innerHTML =
+      '<div class="eq-head"><span class="eq-num">' + e.n + '.</span>' + m(e.html) +
+      '<span class="eq-tag" id="tag-' + e.n + '"></span></div>' +
+      '<details id="ask-' + e.n + '"><summary>Ask yourself</summary><ul>' +
+      e.ask.map(function (a) { return '<li>' + a + '</li>'; }).join('') + '</ul></details>';
+    eqList.appendChild(li);
+  });
+
+  var grid = document.getElementById('graphs');
+  GRAPHS.forEach(function (g) {
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="fig"><span class="numeral">' + g.id + '</span>' +
+      '<canvas tabindex="0" role="img" aria-label="Graph ' + g.id + '. Drag or use arrow keys to rotate."></canvas></div>' +
+      '<label class="pick" for="pick-' + g.id + '">Equations for graph ' + g.id +
+      '<select id="pick-' + g.id + '"><option value="">Choose…</option>' +
+      EQS.map(function (e) { return '<option value="' + e.n + '">' + e.n + '.  ' + e.plain + '</option>'; }).join('') +
+      '</select></label>' +
+      '<span class="status" hidden></span><p class="why" hidden></p>';
+    grid.appendChild(card);
+    g.card = card;
+    g.canvas = card.querySelector('canvas');
+    g.ctx = g.canvas.getContext('2d');
+    g.select = card.querySelector('select');
+    g.status = card.querySelector('.status');
+    g.why = card.querySelector('.why');
+
+    g.select.addEventListener('change', function () {
+      var val = g.select.value ? +g.select.value : null;
+      message = '';
+      if (val) GRAPHS.forEach(function (o) {
+        if (o !== g && picks[o.id] === val) { picks[o.id] = null; checked[o.id] = false; message = 'Moved ' + val + ' from graph ' + o.id + ' to graph ' + g.id + '.'; }
+      });
+      picks[g.id] = val; checked[g.id] = false;
+      save(); render();
+    });
+
+    // rotation
+    var last = null;
+    g.canvas.addEventListener('pointerdown', function (ev) {
+      last = [ev.clientX, ev.clientY];
+      try { g.canvas.setPointerCapture(ev.pointerId); } catch (err) {}
+    });
+    g.canvas.addEventListener('pointermove', function (ev) {
+      if (!last) return;
+      g.a -= (ev.clientX - last[0]) * 0.012;
+      g.e = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, g.e + (ev.clientY - last[1]) * 0.012));
+      last = [ev.clientX, ev.clientY];
+      draw(g);
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(function (n) {
+      g.canvas.addEventListener(n, function () { last = null; });
+    });
+    g.canvas.addEventListener('keydown', function (ev) {
+      var step = 0.12, hit = true;
+      if (ev.key === 'ArrowLeft') g.a += step;
+      else if (ev.key === 'ArrowRight') g.a -= step;
+      else if (ev.key === 'ArrowUp') g.e = Math.min(Math.PI / 2, g.e + step);
+      else if (ev.key === 'ArrowDown') g.e = Math.max(-Math.PI / 2, g.e - step);
+      else hit = false;
+      if (hit) { ev.preventDefault(); draw(g); }
+    });
+
+    var size = function () {
+      var rect = g.canvas.getBoundingClientRect();
+      if (!rect.width) return;
+      g.dpr = window.devicePixelRatio || 1;
+      g.w = rect.width; g.h = rect.height;
+      g.canvas.width = Math.round(g.w * g.dpr); g.canvas.height = Math.round(g.h * g.dpr);
+      draw(g);
+    };
+    g.size = size;
+    if (window.ResizeObserver) new ResizeObserver(size).observe(g.canvas);
+  });
+
+  /* ---------- render ---------- */
+  var score = document.getElementById('score');
+  function render() {
+    var placed = 0, nChecked = 0, right = 0, where = {};
+    GRAPHS.forEach(function (g) {
+      var p = picks[g.id];
+      g.select.value = p ? String(p) : '';
+      if (p) { placed++; where[p] = g.id; }
+      var ok = p === g.ans;
+      if (checked[g.id] && p) {
+        nChecked++; if (ok) right++;
+        g.card.dataset.state = ok ? 'ok' : 'no';
+        g.status.hidden = false;
+        g.status.className = 'status ' + (ok ? 'ok' : 'no');
+        g.status.textContent = ok ? '✓ Correct' : '✗ Not a match. Try another.';
+        g.why.hidden = !ok;
+        g.why.innerHTML = ok ? EQ[g.ans].why : '';
+      } else {
+        g.card.dataset.state = '';
+        g.status.hidden = true; g.why.hidden = true;
+      }
+    });
+    EQS.forEach(function (e) {
+      var tag = document.getElementById('tag-' + e.n);
+      tag.textContent = where[e.n] ? 'Graph ' + where[e.n] : 'Not placed';
+      tag.className = 'eq-tag' + (where[e.n] ? ' placed' : '');
+    });
+    score.textContent = message || (nChecked ? right + ' of 6 correct' : placed + ' of 6 placed');
+  }
+
+  document.getElementById('check').addEventListener('click', function () {
+    message = '';
+    GRAPHS.forEach(function (g) { checked[g.id] = !!picks[g.id]; });
+    render();
+  });
+  document.getElementById('reveal').addEventListener('click', function () {
+    message = '';
+    GRAPHS.forEach(function (g) { picks[g.id] = g.ans; checked[g.id] = true; });
+    save(); render();
+  });
+  document.getElementById('reset').addEventListener('click', function () {
+    message = '';
+    GRAPHS.forEach(function (g) { picks[g.id] = null; checked[g.id] = false; });
+    save(); render(); setView(BOOK.a, BOOK.e);
+  });
+
+  function setView(a, e) { GRAPHS.forEach(function (g) { g.a = a; g.e = e; draw(g); }); }
+  document.getElementById('view-book').addEventListener('click', function () { setView(BOOK.a, BOOK.e); });
+  document.getElementById('view-z').addEventListener('click', function () { setView(0, Math.PI / 2); });
+  document.getElementById('view-x').addEventListener('click', function () { setView(0, 0); });
+  document.getElementById('view-y').addEventListener('click', function () { setView(Math.PI / 2, 0); });
+
+  // theme changes
+  if (window.matchMedia) {
+    var mq = window.matchMedia('(prefers-color-scheme: dark)');
+    if (mq.addEventListener) mq.addEventListener('change', drawAll);
+  }
+  new MutationObserver(drawAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  window.addEventListener('resize', function () { GRAPHS.forEach(function (g) { g.size(); }); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawAll);
+
+  readColors();
+  GRAPHS.forEach(function (g) { g.size(); });
+  render();
+})();
+</script>
+
+</body>
+</html>
